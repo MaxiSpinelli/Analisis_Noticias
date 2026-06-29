@@ -10,12 +10,12 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ─────────────────────────────────────────────
-# CONFIGURACIÓN — completá estos valores
+# CONFIGURACIÓN
 # ─────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GMAIL_USER     = os.environ.get("GMAIL_USER", "")
-GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD", "")
-EMAIL_DESTINO  = os.environ.get("EMAIL_DESTINO", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GMAIL_USER        = os.environ.get("GMAIL_USER", "")
+GMAIL_PASSWORD    = os.environ.get("GMAIL_PASSWORD", "")
+EMAIL_DESTINO     = os.environ.get("EMAIL_DESTINO", "")
 
 PROCESSED_FILE = "processed_ids.json"
 
@@ -88,7 +88,7 @@ def es_relevante(titulo, descripcion):
     return any(k in texto for k in KEYWORDS)
 
 # ─────────────────────────────────────────────
-# GEMINI
+# CLAUDE HAIKU — análisis de noticia
 # ─────────────────────────────────────────────
 PROMPT_SISTEMA = (
     "Sos un analista financiero y geopolítico senior. "
@@ -100,7 +100,7 @@ PROMPT_SISTEMA = (
     "Mencioná siempre si hay correlación con Argentina cuando sea relevante."
 )
 
-def analizar_con_gemini(titulo, fuente, descripcion):
+def analizar_con_claude(titulo, fuente, descripcion):
     prompt = (
         f"Noticia: {titulo}\n"
         f"Fuente: {fuente}\n"
@@ -112,23 +112,30 @@ def analizar_con_gemini(titulo, fuente, descripcion):
         "RELEVANCIA: (Alta / Media / Baja)\n"
     )
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    )
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
     body = {
-        "system_instruction": {"parts": [{"text": PROMPT_SISTEMA}]},
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 400},
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 400,
+        "system": PROMPT_SISTEMA,
+        "messages": [{"role": "user", "content": prompt}],
     }
 
     try:
-        r = requests.post(url, json=body, timeout=20)
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=body,
+            timeout=30,
+        )
         r.raise_for_status()
         data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return data["content"][0]["text"].strip()
     except Exception as e:
-        print(f"  ⚠ Error Gemini: {e}")
+        print(f"  ⚠ Error Claude: {e}")
         return None
 
 def parse_relevancia(analisis_texto):
@@ -237,7 +244,7 @@ def construir_email(noticias_analizadas):
 
     <tr><td style="padding:20px 32px;background:#f8f9fa;border-top:1px solid #eee">
         <p style="margin:0;font-size:11px;color:#aaa;text-align:center">
-            Generado automáticamente · Análisis por Gemini 2.0 Flash</p>
+            Generado automáticamente · Análisis por Claude Haiku</p>
     </td></tr>
 
 </table></body></html>"""
@@ -295,8 +302,8 @@ def main():
                         continue
 
                     print(f"  🔍 Analizando: {titulo[:70]}...")
-                    analisis = analizar_con_gemini(titulo, fuente, descripcion)
-                    time.sleep(3)  # pausa entre llamadas a Gemini
+                    analisis = analizar_con_claude(titulo, fuente, descripcion)
+                    time.sleep(1)
 
                     if analisis:
                         relevancia = parse_relevancia(analisis)
