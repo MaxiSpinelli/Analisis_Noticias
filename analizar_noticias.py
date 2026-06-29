@@ -4,6 +4,7 @@ import smtplib
 import json
 import os
 import hashlib
+import time
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -12,11 +13,11 @@ from email.mime.multipart import MIMEMultipart
 # CONFIGURACIÓN — completá estos valores
 # ─────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GMAIL_USER     = os.environ.get("GMAIL_USER", "")       # tu email de Gmail
-GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD", "")   # App Password de Google
-EMAIL_DESTINO  = os.environ.get("EMAIL_DESTINO", "")    # donde querés recibir el digest
+GMAIL_USER     = os.environ.get("GMAIL_USER", "")
+GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD", "")
+EMAIL_DESTINO  = os.environ.get("EMAIL_DESTINO", "")
 
-PROCESSED_FILE = "processed_ids.json"  # guarda IDs ya analizados
+PROCESSED_FILE = "processed_ids.json"
 
 # ─────────────────────────────────────────────
 # FEEDS RSS
@@ -43,20 +44,16 @@ FEEDS = {
 }
 
 # ─────────────────────────────────────────────
-# KEYWORDS — noticia pasa el filtro si contiene al menos una
+# KEYWORDS
 # ─────────────────────────────────────────────
 KEYWORDS = [
-    # Argentina
     "dólar", "dolar", "cepo", "bcra", "reservas", "deuda", "milei",
     "inflación", "inflacion", "peso", "afip", "arca", "exportaciones",
-    # Mercados globales
     "fed", "tasa", "s&p", "nasdaq", "recesión", "recesion",
     "reserva federal", "powell", "treasury", "bonos", "bolsa",
     "commodities", "soja", "petróleo", "petroleo", "oro",
-    # Geopolítica
     "guerra", "sanciones", "opep", "aranceles", "trump", "china",
     "rusia", "ucrania", "medio oriente", "taiwan",
-    # Tech / IA
     "openai", "anthropic", "nvidia", "inteligencia artificial",
     "ia", "chip", "semiconductor", "google deepmind", "llm",
 ]
@@ -71,7 +68,6 @@ def cargar_procesados():
     return set()
 
 def guardar_procesados(ids):
-    # Solo guarda los últimos 500 para no crecer infinito
     ids_lista = list(ids)[-500:]
     with open(PROCESSED_FILE, "w") as f:
         json.dump(ids_lista, f)
@@ -81,10 +77,9 @@ def id_noticia(entry):
     return hashlib.md5(base.encode()).hexdigest()
 
 def es_reciente(entry, horas=24):
-    """Filtra noticias de las últimas N horas."""
     published = entry.get("published_parsed") or entry.get("updated_parsed")
     if not published:
-        return True  # si no tiene fecha, la incluimos
+        return True
     fecha = datetime(*published[:6])
     return datetime.utcnow() - fecha < timedelta(hours=horas)
 
@@ -93,7 +88,7 @@ def es_relevante(titulo, descripcion):
     return any(k in texto for k in KEYWORDS)
 
 # ─────────────────────────────────────────────
-# GEMINI — análisis de noticia
+# GEMINI
 # ─────────────────────────────────────────────
 PROMPT_SISTEMA = (
     "Sos un analista financiero y geopolítico senior. "
@@ -148,9 +143,6 @@ def parse_relevancia(analisis_texto):
 # ─────────────────────────────────────────────
 # EMAIL HTML
 # ─────────────────────────────────────────────
-COLORES = {"Alta": "#e74c3c", "Media": "#f39c12", "Baja": "#95a5a6"}
-EMOJIS  = {"Alta": "🔴", "Media": "🟡", "Baja": "⚪"}
-
 def construir_email(noticias_analizadas):
     fecha = datetime.now().strftime("%A %d de %B, %Y").capitalize()
 
@@ -167,11 +159,10 @@ def construir_email(noticias_analizadas):
             <hr style="border:none;border-top:1px solid {color};margin:8px 0 0">
         </td></tr>"""
         for n in lista:
-            # Parsear líneas del análisis
             lineas = {l.split(":")[0].strip().upper(): ":".join(l.split(":")[1:]).strip()
                       for l in n["analisis"].splitlines() if ":" in l}
-            resumen  = lineas.get("RESUMEN", "")
-            impacto  = lineas.get("IMPACTO MERCADO", "")
+            resumen   = lineas.get("RESUMEN", "")
+            impacto   = lineas.get("IMPACTO MERCADO", "")
             argentina = lineas.get("ARGENTINA", "")
 
             html += f"""
@@ -231,7 +222,6 @@ def construir_email(noticias_analizadas):
 <table width="100%" style="max-width:680px;margin:32px auto;background:#fff;
        border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
 
-    <!-- HEADER -->
     <tr><td style="background:#1a1a2e;padding:28px 32px">
         <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:3px;
                   color:#4a9eff;text-transform:uppercase">Briefing diario</p>
@@ -245,7 +235,6 @@ def construir_email(noticias_analizadas):
     {cuerpo_medias}
     {sin_noticias}
 
-    <!-- FOOTER -->
     <tr><td style="padding:20px 32px;background:#f8f9fa;border-top:1px solid #eee">
         <p style="margin:0;font-size:11px;color:#aaa;text-align:center">
             Generado automáticamente · Análisis por Gemini 2.0 Flash</p>
@@ -307,6 +296,7 @@ def main():
 
                     print(f"  🔍 Analizando: {titulo[:70]}...")
                     analisis = analizar_con_gemini(titulo, fuente, descripcion)
+                    time.sleep(3)  # pausa entre llamadas a Gemini
 
                     if analisis:
                         relevancia = parse_relevancia(analisis)
@@ -331,14 +321,12 @@ def main():
 
     guardar_procesados(procesados)
 
-    # Ordenar: Altas primero
     orden = {"Alta": 0, "Media": 1, "Baja": 2}
     noticias_analizadas.sort(key=lambda x: orden.get(x["relevancia"], 9))
 
     print(f"\n📊 Resultado: {len(noticias_analizadas)} noticias relevantes")
     altas = sum(1 for n in noticias_analizadas if n["relevancia"] == "Alta")
 
-    # Construir y enviar email
     html = construir_email(noticias_analizadas)
     enviar_email(html, GMAIL_USER, GMAIL_PASSWORD, EMAIL_DESTINO, altas)
 
