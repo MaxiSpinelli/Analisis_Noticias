@@ -1,0 +1,45 @@
+name: Briefing Diario
+
+on:
+  schedule:
+    # Corre todos los días a las 7:00 AM hora Argentina (UTC-3 = 10:00 UTC)
+    - cron: '0 10 * * *'
+  workflow_dispatch:  # permite correrlo manualmente desde GitHub
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install feedparser requests
+
+      - name: Cargar IDs procesados (caché)
+        uses: actions/cache@v4
+        with:
+          path: processed_ids.json
+          key: processed-ids-${{ github.run_id }}
+          restore-keys: processed-ids-
+
+      - name: Correr script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_USER:     ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          EMAIL_DESTINO:  ${{ secrets.EMAIL_DESTINO }}
+        run: python analizar_noticias.py
+
+      - name: Guardar IDs procesados
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: processed_ids.json
+          key: processed-ids-${{ github.run_id }}
