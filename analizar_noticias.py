@@ -76,7 +76,7 @@ def id_noticia(entry):
     base = entry.get("link", "") or entry.get("title", "")
     return hashlib.md5(base.encode()).hexdigest()
 
-def es_reciente(entry, horas=24):
+def es_reciente(entry, horas=72):
     published = entry.get("published_parsed") or entry.get("updated_parsed")
     if not published:
         return True
