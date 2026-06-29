@@ -91,24 +91,33 @@ def es_relevante(titulo, descripcion):
 # CLAUDE HAIKU — análisis de noticia
 # ─────────────────────────────────────────────
 PROMPT_SISTEMA = (
-    "Sos un analista financiero y geopolítico senior. "
-    "Tu trabajo es leer noticias y explicar el impacto real en los mercados, "
-    "no repetir lo que dice la noticia. "
-    "Reglas: nunca uses frases vagas como 'podría impactar' o 'se espera que'. "
-    "Si no hay impacto claro en mercados, asigná RELEVANCIA: Baja. "
-    "El análisis debe responder: ¿qué hace el mercado con esto? ¿quién gana, quién pierde? "
-    "Mencioná siempre si hay correlación con Argentina cuando sea relevante."
+    "Sos un analista geopolítico y económico senior con 20 años de experiencia. "
+    "Tu trabajo es explicar el mundo a una persona inteligente que quiere entender "
+    "el contexto macro global, no operar mercados. "
+    "Escribís con claridad, profundidad y sin jerga técnica innecesaria. "
+    "Cuando usás un término técnico, lo explicás en la misma oración. "
+    "Tu análisis siempre responde tres preguntas: "
+    "¿Por qué esta noticia importa más allá del titular? "
+    "¿Qué fuerzas geopolíticas o económicas revela o acelera? "
+    "¿Qué escenarios pueden abrirse a partir de esto en los próximos 6-12 meses? "
+    "Si la noticia no tiene impacto real en el contexto macro global, asigná RELEVANCIA: Baja. "
+    "Siempre considerá si hay impacto o lección relevante para Argentina y América Latina."
 )
 
 def analizar_con_claude(titulo, fuente, descripcion):
     prompt = (
         f"Noticia: {titulo}\n"
         f"Fuente: {fuente}\n"
-        f"Contenido: {descripcion[:800]}\n\n"
-        "Respondé EXACTAMENTE en este formato, sin texto extra:\n\n"
-        "RESUMEN: (máximo 2 líneas, qué pasó)\n"
-        "IMPACTO MERCADO: (qué movió o va a mover: dólar, bonos, acciones — ser específico)\n"
-        "ARGENTINA: (cómo afecta; si no aplica escribí 'Sin impacto directo')\n"
+        f"Contenido: {descripcion[:1000]}\n\n"
+        "Respondé EXACTAMENTE en este formato:\n\n"
+        "CONTEXTO: (2-3 líneas explicando qué fuerzas o tensiones revela esta noticia, "
+        "más allá del hecho en sí)\n\n"
+        "ANÁLISIS: (3-4 líneas de análisis profundo: por qué importa, qué cambia en el "
+        "mundo con esto, quién gana poder y quién lo pierde)\n\n"
+        "FORECAST: (2-3 escenarios concretos de lo que puede suceder en los próximos "
+        "6-12 meses a partir de esto. Ser específico, no vago)\n\n"
+        "ARGENTINA/LATAM: (impacto directo o indirecto concreto; "
+        "si realmente no aplica escribí 'Sin impacto relevante')\n\n"
         "RELEVANCIA: (Alta / Media / Baja)\n"
     )
 
@@ -119,7 +128,7 @@ def analizar_con_claude(titulo, fuente, descripcion):
     }
     body = {
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 400,
+        "max_tokens": 800,
         "system": PROMPT_SISTEMA,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -166,45 +175,59 @@ def construir_email(noticias_analizadas):
             <hr style="border:none;border-top:1px solid {color};margin:8px 0 0">
         </td></tr>"""
         for n in lista:
-            lineas = {l.split(":")[0].strip().upper(): ":".join(l.split(":")[1:]).strip()
-                      for l in n["analisis"].splitlines() if ":" in l}
-            resumen   = lineas.get("RESUMEN", "")
-            impacto   = lineas.get("IMPACTO MERCADO", "")
-            argentina = lineas.get("ARGENTINA", "")
+            lineas = {}
+            current_key = None
+            current_val = []
+            for l in n["analisis"].splitlines():
+                if not l.strip():
+                    continue
+                if ":" in l and l.split(":")[0].strip().upper() in [
+                    "CONTEXTO", "ANÁLISIS", "ANALISIS", "FORECAST", "ARGENTINA/LATAM", "RELEVANCIA"
+                ]:
+                    if current_key:
+                        lineas[current_key] = " ".join(current_val).strip()
+                    current_key = l.split(":")[0].strip().upper()
+                    current_val = [":".join(l.split(":")[1:]).strip()]
+                elif current_key:
+                    current_val.append(l.strip())
+            if current_key:
+                lineas[current_key] = " ".join(current_val).strip()
+
+            contexto  = lineas.get("CONTEXTO", "")
+            analisis  = lineas.get("ANÁLISIS", lineas.get("ANALISIS", ""))
+            forecast  = lineas.get("FORECAST", "")
+            argentina = lineas.get("ARGENTINA/LATAM", "")
 
             html += f"""
-        <tr><td style="padding:16px 32px 20px;border-bottom:1px solid #f0f0f0">
-            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#1a1a1a;
+        <tr><td style="padding:20px 32px 24px;border-bottom:1px solid #f0f0f0">
+            <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#1a1a1a;
                       line-height:1.4">{n['titulo']}</p>
-            <p style="margin:0 0 12px;font-size:11px;color:#888">
+            <p style="margin:0 0 16px;font-size:11px;color:#888">
                 {n['fuente']} &nbsp;·&nbsp; {n['categoria']}
             </p>
-            <table style="width:100%;border-collapse:collapse">
-                <tr>
-                    <td style="width:50%;padding:8px 12px;background:#f8f9fa;
-                               border-radius:6px;vertical-align:top">
-                        <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                                  color:#555;text-transform:uppercase;letter-spacing:1px">
-                            Resumen</p>
-                        <p style="margin:0;font-size:13px;color:#333;line-height:1.5">
-                            {resumen}</p>
-                    </td>
-                    <td style="width:2%"></td>
-                    <td style="width:48%;padding:8px 12px;background:#f8f9fa;
-                               border-radius:6px;vertical-align:top">
-                        <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                                  color:#555;text-transform:uppercase;letter-spacing:1px">
-                            Impacto mercado</p>
-                        <p style="margin:0;font-size:13px;color:#333;line-height:1.5">
-                            {impacto}</p>
-                    </td>
-                </tr>
-            </table>
-            {"" if argentina in ("Sin impacto directo", "") else f'''
-            <p style="margin:12px 0 0;font-size:12px;color:#2c5282;background:#ebf4ff;
-                      padding:8px 12px;border-radius:6px;border-left:3px solid #3182ce">
-                🇦🇷 <b>Argentina:</b> {argentina}</p>'''}
-            <p style="margin:12px 0 0">
+
+            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#555;
+                      text-transform:uppercase;letter-spacing:1px">Contexto</p>
+            <p style="margin:0 0 14px;font-size:13px;color:#444;line-height:1.6;
+                      padding-left:12px;border-left:3px solid #e0e0e0">{contexto}</p>
+
+            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#555;
+                      text-transform:uppercase;letter-spacing:1px">Análisis</p>
+            <p style="margin:0 0 14px;font-size:13px;color:#333;line-height:1.6;
+                      padding-left:12px;border-left:3px solid {color}">{analisis}</p>
+
+            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#555;
+                      text-transform:uppercase;letter-spacing:1px">Forecast 6-12 meses</p>
+            <p style="margin:0 0 14px;font-size:13px;color:#333;line-height:1.6;
+                      background:#fafafa;padding:10px 14px;border-radius:6px">{forecast}</p>
+
+            {"" if argentina in ("Sin impacto relevante", "") else f'''
+            <p style="margin:0 0 14px;font-size:12px;color:#2c5282;background:#ebf4ff;
+                      padding:10px 14px;border-radius:6px;border-left:3px solid #3182ce;
+                      line-height:1.6">
+                🇦🇷 <b>Argentina / LATAM:</b> {argentina}</p>'''}
+
+            <p style="margin:0">
                 <a href="{n['link']}" style="font-size:12px;color:#3182ce;
                           text-decoration:none;font-weight:600">
                     Ver noticia completa →</a></p>
