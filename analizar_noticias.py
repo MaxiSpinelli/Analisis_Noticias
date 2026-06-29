@@ -76,7 +76,7 @@ def id_noticia(entry):
     base = entry.get("link", "") or entry.get("title", "")
     return hashlib.md5(base.encode()).hexdigest()
 
-def es_reciente(entry, horas=72):
+def es_reciente(entry, horas=24):
     published = entry.get("published_parsed") or entry.get("updated_parsed")
     if not published:
         return True
@@ -101,7 +101,6 @@ PROMPT_SISTEMA = (
 )
 
 def analizar_con_claude(titulo, fuente, descripcion):
-    print(f"  DEBUG key: {ANTHROPIC_API_KEY[:10]}...")  # agregar esta línea
     prompt = (
         f"Noticia: {titulo}\n"
         f"Fuente: {fuente}\n"
