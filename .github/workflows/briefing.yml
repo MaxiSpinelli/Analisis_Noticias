@@ -3,7 +3,7 @@ name: Briefing Diario
 on:
   schedule:
     # Corre todos los días a las 7:00 AM hora Argentina (UTC-3 = 10:00 UTC)
-    - cron: '0 10 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch:  # permite correrlo manualmente desde GitHub
 
 jobs:
