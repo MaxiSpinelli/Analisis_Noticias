@@ -101,6 +101,7 @@ PROMPT_SISTEMA = (
 )
 
 def analizar_con_claude(titulo, fuente, descripcion):
+    print(f"  DEBUG key: {ANTHROPIC_API_KEY[:10]}...")  # agregar esta línea
     prompt = (
         f"Noticia: {titulo}\n"
         f"Fuente: {fuente}\n"
