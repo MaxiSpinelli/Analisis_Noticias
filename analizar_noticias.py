@@ -91,9 +91,20 @@ def es_relevante(titulo, descripcion):
 # CLAUDE HAIKU — análisis de noticia
 # ─────────────────────────────────────────────
 PROMPT_TRIAGE = (
-    "Sos un analista financiero y geopolítico. Tu única tarea acá es clasificar "
-    "una noticia por su relevancia para el contexto macro global (economía, "
-    "geopolítica, mercados). No expliques nada, solo clasificá."
+    "Sos un analista financiero y geopolítico estricto. Tu única tarea acá es "
+    "clasificar una noticia por su relevancia real para el contexto macro global "
+    "(economía, geopolítica, mercados, política monetaria, comercio internacional). "
+    "Sé exigente: la sola mención de un país, guerra, o figura política NO alcanza "
+    "para que sea relevante. "
+    "Clasificá como Baja cualquier noticia que sea principalmente sobre: deportes "
+    "(incluso si menciona países o guerras como contexto histórico), entretenimiento, "
+    "cultura, celebridades, human interest, lifestyle, o color/curiosidades, "
+    "aunque mencione tangencialmente economía o geopolítica. "
+    "Ejemplo: una nota sobre un partido de fútbol que menciona la historia de guerra "
+    "de un país es Baja, no Alta — el sujeto de la noticia es el deporte, no el conflicto. "
+    "Solo es Alta o Media si el hecho central de la noticia mueve mercados, cambia "
+    "política económica, o altera relaciones de poder entre países. "
+    "No expliques nada, solo clasificá."
 )
 
 PROMPT_ANALISIS = (
