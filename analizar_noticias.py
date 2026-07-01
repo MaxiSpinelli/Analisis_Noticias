@@ -90,7 +90,13 @@ def es_relevante(titulo, descripcion):
 # ─────────────────────────────────────────────
 # CLAUDE HAIKU — análisis de noticia
 # ─────────────────────────────────────────────
-PROMPT_SISTEMA = (
+PROMPT_TRIAGE = (
+    "Sos un analista financiero y geopolítico. Tu única tarea acá es clasificar "
+    "una noticia por su relevancia para el contexto macro global (economía, "
+    "geopolítica, mercados). No expliques nada, solo clasificá."
+)
+
+PROMPT_ANALISIS = (
     "Sos un analista geopolítico y económico senior con 20 años de experiencia. "
     "Tu trabajo es explicar el mundo a una persona inteligente que quiere entender "
     "el contexto macro global, no operar mercados. "
@@ -100,11 +106,51 @@ PROMPT_SISTEMA = (
     "¿Por qué esta noticia importa más allá del titular? "
     "¿Qué fuerzas geopolíticas o económicas revela o acelera? "
     "¿Qué escenarios pueden abrirse a partir de esto en los próximos 6-12 meses? "
-    "Si la noticia no tiene impacto real en el contexto macro global, asigná RELEVANCIA: Baja. "
     "Siempre considerá si hay impacto o lección relevante para Argentina y América Latina."
 )
 
+def triage_con_claude(titulo, descripcion):
+    """Clasificación rápida y barata: decide si vale la pena el análisis completo."""
+    prompt = (
+        f"Noticia: {titulo}\n"
+        f"Resumen: {descripcion[:300]}\n\n"
+        "Clasificá su relevancia para el contexto macro económico/geopolítico global. "
+        "Respondé SOLO una palabra: Alta, Media o Baja."
+    )
+
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    body = {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 10,
+        "system": PROMPT_TRIAGE,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    try:
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=body,
+            timeout=20,
+        )
+        r.raise_for_status()
+        data = r.json()
+        texto = data["content"][0]["text"].strip().upper()
+        if "ALTA" in texto:
+            return "Alta"
+        if "MEDIA" in texto:
+            return "Media"
+        return "Baja"
+    except Exception as e:
+        print(f"  ⚠ Error triage: {e}")
+        return "Baja"
+
 def analizar_con_claude(titulo, fuente, descripcion):
+    """Análisis profundo — solo se llama para noticias que pasaron el triage."""
     prompt = (
         f"Noticia: {titulo}\n"
         f"Fuente: {fuente}\n"
@@ -117,8 +163,7 @@ def analizar_con_claude(titulo, fuente, descripcion):
         "FORECAST: (2-3 escenarios concretos de lo que puede suceder en los próximos "
         "6-12 meses a partir de esto. Ser específico, no vago)\n\n"
         "ARGENTINA/LATAM: (impacto directo o indirecto concreto; "
-        "si realmente no aplica escribí 'Sin impacto relevante')\n\n"
-        "RELEVANCIA: (Alta / Media / Baja)\n"
+        "si realmente no aplica escribí 'Sin impacto relevante')\n"
     )
 
     headers = {
@@ -128,8 +173,8 @@ def analizar_con_claude(titulo, fuente, descripcion):
     }
     body = {
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 800,
-        "system": PROMPT_SISTEMA,
+        "max_tokens": 600,
+        "system": PROMPT_ANALISIS,
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -146,15 +191,6 @@ def analizar_con_claude(titulo, fuente, descripcion):
     except Exception as e:
         print(f"  ⚠ Error Claude: {e}")
         return None
-
-def parse_relevancia(analisis_texto):
-    for linea in analisis_texto.splitlines():
-        if linea.upper().startswith("RELEVANCIA"):
-            if "ALTA" in linea.upper():
-                return "Alta"
-            if "MEDIA" in linea.upper():
-                return "Media"
-    return "Baja"
 
 # ─────────────────────────────────────────────
 # EMAIL HTML
@@ -324,13 +360,15 @@ def main():
                         procesados.add(nid)
                         continue
 
-                    print(f"  🔍 Analizando: {titulo[:70]}...")
-                    analisis = analizar_con_claude(titulo, fuente, descripcion)
-                    time.sleep(1)
+                    print(f"  🔍 Triage: {titulo[:70]}...")
+                    relevancia = triage_con_claude(titulo, descripcion)
+                    time.sleep(0.5)
+                    print(f"    → {relevancia}")
 
-                    if analisis:
-                        relevancia = parse_relevancia(analisis)
-                        if relevancia in ("Alta", "Media"):
+                    if relevancia in ("Alta", "Media"):
+                        analisis = analizar_con_claude(titulo, fuente, descripcion)
+                        time.sleep(1)
+                        if analisis:
                             noticias_analizadas.append({
                                 "titulo":     titulo,
                                 "fuente":     fuente,
@@ -339,7 +377,6 @@ def main():
                                 "analisis":   analisis,
                                 "relevancia": relevancia,
                             })
-                            print(f"    → {relevancia}")
 
                     procesados.add(nid)
                     nuevas += 1
