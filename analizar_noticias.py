@@ -354,6 +354,9 @@ def main():
     orden = {"Alta": 0, "Media": 1, "Baja": 2}
     noticias_analizadas.sort(key=lambda x: orden.get(x["relevancia"], 9))
 
+    # Limitar a las 15 noticias mas relevantes del dia
+    noticias_analizadas = noticias_analizadas[:15]
+
     print(f"\n📊 Resultado: {len(noticias_analizadas)} noticias relevantes")
     altas = sum(1 for n in noticias_analizadas if n["relevancia"] == "Alta")
 
